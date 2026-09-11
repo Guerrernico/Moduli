@@ -6,6 +6,6 @@
   "language": "Italian (SUB/DUB)",
   "baseUrl": "https://www.animeworld.ac",
   "type": "anime",
-  "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/main/Animeworld/animeworld.js",
+  "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/refs/heads/main/Animeworld/animeworld.js",
   "multiStream": false
 }
