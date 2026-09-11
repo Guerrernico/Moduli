@@ -1,0 +1,11 @@
+{
+  "sourceName": "AnimeWorld",
+  "author": { "name": "Hoshi", "icon": null },
+  "iconUrl": "https://www.animeworld.ac/favicon.ico",
+  "version": "1.0.0",
+  "language": "Italian (SUB/DUB)",
+  "baseUrl": "https://www.animeworld.ac",
+  "type": "anime",
+  "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/main/Animeworld/animeworld.js",
+  "multiStream": false
+}
