@@ -11,7 +11,7 @@
     "quality": "720p",
     "baseUrl": "https://animeunity.so",
     "searchBaseUrl": "https://www.animeunity.so/archivio?title=%s",
-    "scriptUrl": "https://git.luna-app.eu/sobet/sources/raw/branch/main/AnimeUnity/animeunity.js",
+    "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/refs/heads/main/AnimeUnity/animeunity.js",
     "asyncJS": true,
     "type": "anime"
 }
