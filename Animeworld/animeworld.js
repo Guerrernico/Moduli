@@ -1,16 +1,19 @@
 // AnimeWorld (animeworld.ac) module for Hoshi.
 //
 // Ported from a confirmed-working module for the same site on another app in this
-// ecosystem (LunaNew), then adjusted to always use the "www." host explicitly — the
-// bare domain 301-redirects to it via Cloudflare, and depending on that redirect being
-// followed correctly turned out to be fragile.
+// ecosystem (LunaNew). Empirically, a *direct* request to www.animeworld.ac triggers a
+// "resource exceeds maximum size" network error in this app, while requesting the bare
+// domain (which 301-redirects to www. and gets followed automatically) does not — so,
+// counter-intuitively, the bare domain is the one that actually works here. The
+// episode-info API call is the one exception, matching the reference module: it's
+// requested on www. directly and that's fine.
 //
 // Deliberately no try/catch here: a rejected promise surfaces as a real, visible error
 // in the app (module picker shows it under this module's name). Swallowing errors and
 // returning an empty array instead made every real failure look identical to "no
 // results found", which made this impossible to debug from the app alone.
 
-const BASE_URL = "https://www.animeworld.ac";
+const BASE_URL = "https://animeworld.ac";
 
 function absoluteUrl(href) {
     if (href.startsWith("https")) return href;
