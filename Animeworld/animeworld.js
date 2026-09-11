@@ -1,80 +1,99 @@
 // AnimeWorld (animeworld.ac) module for Hoshi.
 //
-// Site structure (verified live):
-//   Search:   GET /search?keyword={query}      -> div.film-list > div.item > div.inner
-//   Detail:   GET {href from search}            -> h1#anime-title, div.desc,
-//                                                   li.episode > a[data-id][data-episode-num]
-//   Stream:   GET /api/episode/info?id={token}&alt=0 -> JSON { "grabber": "<direct .mp4>" }
-//
-// No cookies/Referer/CSRF needed for any of the three requests, and the resulting .mp4
-// is directly fetchable with no extra headers.
+// Ported from a confirmed-working module for the same site on another app in this
+// ecosystem (LunaNew) — notably: the bare domain (no "www.") for search/detail/episode
+// pages, but "www." specifically for the episode-info API call.
 
-const BASE_URL = "https://www.animeworld.ac";
+const BASE_URL = "https://animeworld.ac";
 
 function absoluteUrl(href) {
-    if (href.indexOf("http") === 0) return href;
-    return BASE_URL + href;
+    if (href.startsWith("https")) return href;
+    return href.startsWith("/") ? BASE_URL + href : BASE_URL + "/" + href;
 }
 
 async function searchResults(keyword) {
-    const res = await fetchv2(`${BASE_URL}/search?keyword=${encodeURIComponent(keyword)}`);
-    const html = await res.text();
+    try {
+        const res = await fetchv2(`${BASE_URL}/search?keyword=${encodeURIComponent(keyword)}`);
+        const html = await res.text();
 
-    const results = [];
-    const blocks = html.split('<div class="inner">').slice(1);
+        const results = [];
+        const filmListMatch = html.match(/<div class="film-list">([\s\S]*?)<div class="clearfix"><\/div>\s*<\/div>/);
+        if (!filmListMatch) return JSON.stringify(results);
 
-    for (const block of blocks) {
-        const nameMatch = block.match(/href="([^"]+)"[^>]*class="name"[^>]*>([^<]+)</);
-        if (!nameMatch) continue;
+        const items = filmListMatch[1].match(/<div class="item">[\s\S]*?<\/div>[\s]*<\/div>/g) || [];
 
-        const imgMatch = block.match(/<img[^>]+src="([^"]+)"/);
+        for (const itemHtml of items) {
+            const imgMatch = itemHtml.match(/src="([^"]+)"/);
+            const titleMatch = itemHtml.match(/class="name">([^<]+)</);
+            const hrefMatch = itemHtml.match(/href="([^"]+)"/);
+            if (!imgMatch || !titleMatch || !hrefMatch) continue;
 
-        results.push({
-            title: htmlEntityDecode(nameMatch[2]).trim(),
-            image: imgMatch ? imgMatch[1] : null,
-            href: absoluteUrl(nameMatch[1])
-        });
+            results.push({
+                title: htmlEntityDecode(titleMatch[1]).trim(),
+                image: absoluteUrl(imgMatch[1]),
+                href: absoluteUrl(hrefMatch[1])
+            });
+        }
+
+        return JSON.stringify(results);
+    } catch (error) {
+        console.log("searchResults error: " + error);
+        return JSON.stringify([]);
     }
-
-    return JSON.stringify(results);
 }
 
 async function extractDetails(url) {
-    const res = await fetchv2(url);
-    const html = await res.text();
+    try {
+        const res = await fetchv2(url);
+        const html = await res.text();
 
-    const descMatch = html.match(/<div class="desc"[^>]*>([\s\S]*?)<\/div>/);
-    const description = descMatch ? normalizeWhitespace(htmlEntityDecode(getInnerText(descMatch[1]))) : "";
+        const descMatch = html.match(/<div class="desc">([\s\S]*?)<\/div>/);
+        const description = descMatch ? normalizeWhitespace(htmlEntityDecode(getInnerText(descMatch[1]))) : "";
 
-    return JSON.stringify([{ description: description, aliases: "", airdate: "" }]);
+        return JSON.stringify([{ description: description, aliases: "", airdate: "" }]);
+    } catch (error) {
+        console.log("extractDetails error: " + error);
+        return JSON.stringify([]);
+    }
 }
 
 async function extractEpisodes(url) {
-    const res = await fetchv2(url);
-    const html = await res.text();
+    try {
+        const res = await fetchv2(url);
+        const html = await res.text();
 
-    const episodes = [];
-    const seen = {};
-    const episodeRegex = /data-id="([^"]+)"[^>]*data-episode-num="(\d+)"[^>]*href="[^"]+"/g;
-    let match;
-    while ((match = episodeRegex.exec(html)) !== null) {
-        const token = match[1];
-        if (seen[token]) continue;
-        seen[token] = true;
-        episodes.push({ number: parseInt(match[2], 10), href: token });
+        const episodes = [];
+        const serverMatch = html.match(/<div class="server active"[^>]*>([\s\S]*?)<\/ul>\s*<\/div>/);
+        if (!serverMatch) return JSON.stringify(episodes);
+
+        const episodeRegex = /<li class="episode">\s*<a[^>]*?href="([^"]+)"[^>]*?>([^<]+)<\/a>/g;
+        let match;
+        while ((match = episodeRegex.exec(serverMatch[1])) !== null) {
+            episodes.push({
+                href: absoluteUrl(match[1]),
+                number: parseInt(match[2], 10)
+            });
+        }
+
+        return JSON.stringify(episodes);
+    } catch (error) {
+        console.log("extractEpisodes error: " + error);
+        return JSON.stringify([]);
     }
-
-    episodes.sort((a, b) => a.number - b.number);
-    return JSON.stringify(episodes);
 }
 
-async function extractStreamUrl(episodeToken) {
-    const res = await fetchv2(`${BASE_URL}/api/episode/info?id=${encodeURIComponent(episodeToken)}&alt=0`);
-    const json = await res.json();
+async function extractStreamUrl(url) {
+    try {
+        const parts = url.split("/");
+        const episodeToken = parts[parts.length - 1];
 
-    if (!json || !json.grabber) {
+        const res = await fetchv2(`https://www.animeworld.ac/api/episode/info?id=${encodeURIComponent(episodeToken)}&alt=0`);
+        const json = JSON.parse(await res.text());
+
+        if (!json || !json.grabber) return JSON.stringify({});
+        return JSON.stringify({ stream: json.grabber });
+    } catch (error) {
+        console.log("extractStreamUrl error: " + error);
         return JSON.stringify({});
     }
-
-    return JSON.stringify({ stream: json.grabber });
 }
