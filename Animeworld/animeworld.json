@@ -4,7 +4,7 @@
   "iconUrl": "https://www.animeworld.ac/favicon.ico",
   "version": "1.0.2",
   "language": "Italian (SUB/DUB)",
-  "baseUrl": "https://animeworld.ac",
+  "baseUrl": "https://www.animeworld.ac",
   "type": "anime",
   "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/refs/heads/main/Animeworld/animeworld.js",
   "multiStream": false
