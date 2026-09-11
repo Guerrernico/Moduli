@@ -1,10 +1,13 @@
 // AnimeWorld (animeworld.ac) module for Hoshi.
 //
 // Ported from a confirmed-working module for the same site on another app in this
-// ecosystem (LunaNew) — notably: the bare domain (no "www.") for search/detail/episode
-// pages, but "www." specifically for the episode-info API call.
+// ecosystem (LunaNew), then adjusted to always use the "www." host explicitly — the
+// bare domain 301-redirects to it via Cloudflare, and depending on that redirect being
+// followed correctly turned out to be fragile.
 
-const BASE_URL = "https://animeworld.ac";
+// The bare domain 301-redirects here via Cloudflare; using "www." directly avoids
+// depending on redirect-following behaving correctly in every fetch layer.
+const BASE_URL = "https://www.animeworld.ac";
 
 function absoluteUrl(href) {
     if (href.startsWith("https")) return href;
