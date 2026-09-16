@@ -1,0 +1,13 @@
+{
+    "sourceName": "Mangaworld",
+    "iconUrl": "https://www.mangaworld.mx/favicon.ico",
+    "author": {
+        "name": "Nicola",
+        "icon": ""
+    },
+    "version": "1.0.0",
+    "language": "Italian",
+    "baseUrl": "https://www.mangaworld.mx",
+    "searchBaseUrl": "https://www.mangaworld.mx/archive?keyword=%s",
+    "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Hoshi/main/MangaModuleScripts/mangaworld.js"
+}
