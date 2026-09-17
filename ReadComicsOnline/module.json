@@ -9,6 +9,6 @@
     "language": "English",
     "baseUrl": "https://readcomicsonline.ru",
     "searchBaseUrl": "https://readcomicsonline.ru/search?query=%s",
-    "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/refs/heads/main/ReadComicsOnline/module.js",
+    "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/refs/heads/main/ReadComicsOnline/readcomicsonline.js",
     "kind": "comic"
 }
