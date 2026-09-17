@@ -1,0 +1,14 @@
+{
+    "sourceName": "ReadComicsOnline",
+    "iconUrl": "https://readcomicsonline.ru/favicon.ico",
+    "author": {
+        "name": "Nicola",
+        "icon": ""
+    },
+    "version": "1.0.0",
+    "language": "English",
+    "baseUrl": "https://readcomicsonline.ru",
+    "searchBaseUrl": "https://readcomicsonline.ru/search?query=%s",
+    "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Hoshi/main/MangaModuleScripts/readcomicsonline.js",
+    "kind": "comic"
+}
