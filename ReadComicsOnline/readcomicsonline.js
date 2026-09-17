@@ -30,15 +30,47 @@ async function rcoFetch(url, options = { headers: {}, method: "GET", body: null,
     }
 }
 
+// A search failure pushes one pseudo-result whose title starts with
+// "⚠️ DEBUG" instead of just returning [] — console.log never reaches
+// an installed build, and GingaDetailView's own diagnostic line (see
+// its searchModules()) shows this title verbatim when present, which
+// is the only way to tell "the request/parsing broke" apart from "the
+// site genuinely has 0 matches" without a device attached.
 async function searchResults(keyword) {
     const baseUrl = "https://readcomicsonline.ru";
     const results = [];
 
     try {
         const response = await rcoFetch(`${baseUrl}/search?query=${encodeURIComponent(keyword)}`);
+        if (!response) {
+            results.push({ title: "⚠️ DEBUG: fetch/fetchv2 non ha restituito risposta", image: "", href: "" });
+            return JSON.stringify(results);
+        }
+
+        const status = response.status ?? "?";
         const text = await response.text();
-        const json = JSON.parse(text);
+
+        let json;
+        try {
+            json = JSON.parse(text);
+        } catch (parseError) {
+            results.push({
+                title: `⚠️ DEBUG: risposta non-JSON (status ${status}): ${text.slice(0, 150).replace(/\s+/g, " ")}`,
+                image: "",
+                href: "",
+            });
+            return JSON.stringify(results);
+        }
+
         const suggestions = json.suggestions || [];
+        if (suggestions.length === 0) {
+            results.push({
+                title: `⚠️ DEBUG: JSON valido (status ${status}), 0 suggestions. Chiavi ricevute: ${Object.keys(json).join(", ") || "nessuna"}`,
+                image: "",
+                href: "",
+            });
+            return JSON.stringify(results);
+        }
 
         for (const s of suggestions) {
             if (!s.data) continue;
@@ -51,8 +83,8 @@ async function searchResults(keyword) {
 
         return JSON.stringify(results);
     } catch (error) {
-        console.log("Search error:", error);
-        return JSON.stringify([]);
+        results.push({ title: `⚠️ DEBUG: eccezione — ${String(error)}`, image: "", href: "" });
+        return JSON.stringify(results);
     }
 }
 
