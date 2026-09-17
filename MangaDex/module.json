@@ -1,0 +1,11 @@
+{
+    "sourceName": "MangaDex",
+    "iconUrl": "https://mangadex.org/favicon.ico",
+    "author": { "name": "Nicola", "icon": "" },
+    "version": "1.0.0",
+    "language": "English",
+    "baseUrl": "https://mangadex.org",
+    "searchBaseUrl": "https://api.mangadex.org/manga?title=%s",
+    "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/refs/heads/main/MangaDex/mangadex.js",
+    "kind": "manga"
+}

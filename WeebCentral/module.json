@@ -1,0 +1,11 @@
+{
+    "sourceName": "Weeb Central",
+    "iconUrl": "https://weebcentral.com/favicon.ico",
+    "author": { "name": "Nicola", "icon": "" },
+    "version": "1.0.0",
+    "language": "English",
+    "baseUrl": "https://weebcentral.com",
+    "searchBaseUrl": "https://weebcentral.com/search/simple?location=main",
+    "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/refs/heads/main/WeebCentral/weebcentral.js",
+    "kind": "manga"
+}
