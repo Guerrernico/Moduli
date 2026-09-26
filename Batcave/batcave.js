@@ -8,8 +8,7 @@
 // every other Cloudflare-style challenge in this app: solve once with the
 // module's own shield button (a real WKWebView, sets a cookie), and
 // fetch/fetchv2 carry that cookie + the WebView's own User-Agent on every
-// request afterward (CloudflareRequestPreparer). No auto-solve — same rule
-// as everywhere else in Hoshi.
+// request afterward. No auto-solve — same rule as everywhere else in Hoshi.
 //
 // Chapter list: the comic's own page embeds its full chapter list as JSON
 // in a `window.__DATA__ = {...};` <script> tag (news_id, chapters[{id,
@@ -25,23 +24,17 @@
 //
 // Sec-Fetch-* headers: the official Kotlin extension's `configureHeaders()`
 // sets these on every request, making programmatic calls look like a real
-// browser's top-level page load rather than an XHR — kept here to match it,
-// though it turned out NOT to be the actual cause of the bug below.
+// browser's top-level page load rather than an XHR — kept here to match it.
 //
-// UNDER INVESTIGATION: a "_Annual"/"_Complete Collection" chapter's image
-// URL 403'd directly, but a regular numbered chapter (41) that Aidoku's own
-// extension loads fine ALSO fails here — so it isn't just those special
-// editions being genuinely unavailable, something else is going on for
-// ordinary chapters too. Current theory: the image CDN (img.batcave.biz) is
-// a different host than batcave.biz, so the Cloudflare/guard cookie
-// harvested via the shield button might not even apply there, and/or it
-// might require a Referer header pointing back at the site — which a JS
-// module has no way to attach to the actual displayed image request at all
-// (extractPages only returns plain URL strings; MangaReaderView's
-// buildPageRequest applies the stored cookie+UA to any host already, but
-// never sets Referer). Testing this via the debug probe below before
-// deciding whether the real fix needs to happen in the app itself rather
-// than this script.
+// Page IMAGES needed a separate fix outside this file entirely: the site's
+// image CDN (img.batcave.biz) 403s any request with no Referer header,
+// confirmed live by comparing the exact same image request with and
+// without one. A JS module has no way to attach a header to the actual
+// image request the reader makes (extractPages only returns plain URL
+// strings) — that fix lives in CloudflareRequestPreparer.prepare()
+// (Hoshi/Modules/CloudflareChallengeSolver.swift), which now defaults
+// Referer to the request's own registrable domain when none is set,
+// covering every page image this or any other module returns.
 
 const baseUrl = "https://batcave.biz";
 
@@ -52,66 +45,7 @@ const DEFAULT_HEADERS = {
     "Sec-Fetch-User": "?1"
 };
 
-// TEMPORANEO — sonda: cercando "REFDEBUG:<numero capitolo>" il modulo trova
-// il vero URL di un'immagine di quel capitolo di Superior Spider-Man e la
-// scarica in tre modi diversi (senza Referer, con Referer alla home del
-// sito, con Referer alla pagina del lettore di quel capitolo), mostrando lo
-// stato di ciascuno — per capire se un header Referer mancante è la causa.
-// Da togliere una volta risolto.
-async function refDebugProbe(chapterNumber) {
-    try {
-        const searchHtml = await (await fetchv2(`${baseUrl}/search/${encodeURIComponent("superior spider-man")}/`, DEFAULT_HEADERS)).text();
-        const hrefMatch = searchHtml.match(/class="readed__title"[^>]*>\s*<a href="([^"]+)"/);
-        if (!hrefMatch) return [{ title: "DEBUG: nessun risultato trovato", image: "", href: "x" }];
-
-        const comicHtml = await (await fetchv2(hrefMatch[1], DEFAULT_HEADERS)).text();
-        const dataMatch = comicHtml.match(/window\.__DATA__\s*=\s*(\{[\s\S]*?\});/);
-        if (!dataMatch) return [{ title: "DEBUG: window.__DATA__ non trovato", image: "", href: "x" }];
-
-        const data = JSON.parse(dataMatch[1]);
-        const targetPosi = Number(chapterNumber);
-        const chapter = (data.chapters || []).find((c) => c.posi === targetPosi);
-        if (!chapter) return [{ title: `DEBUG: capitolo ${chapterNumber} non trovato`, image: "", href: "x" }];
-
-        const readerUrl = `${baseUrl}/reader/${data.news_id}/${chapter.id}${data.xhash || ""}`;
-        const pageResponse = await fetchv2(
-            `${baseUrl}/engine/ajax/controller.php?mod=api&action=reader/getChapterData`,
-            { ...DEFAULT_HEADERS, "Content-Type": "application/json" },
-            "POST",
-            { news_id: data.news_id, chapter_id: chapter.id }
-        );
-        const pageJson = await pageResponse.json();
-        const images = (pageJson.data && pageJson.data.images) || pageJson.images || [];
-        if (images.length === 0) {
-            return [{ title: `DEBUG: getChapterData senza immagini per #${chapterNumber} (id ${chapter.id})`, image: "", href: "x" }];
-        }
-        const imageUrl = images[0];
-
-        const attempts = [
-            { label: "senza Referer", headers: DEFAULT_HEADERS },
-            { label: "Referer=home", headers: { ...DEFAULT_HEADERS, Referer: `${baseUrl}/` } },
-            { label: "Referer=reader", headers: { ...DEFAULT_HEADERS, Referer: readerUrl } }
-        ];
-        const results = [];
-        for (const attempt of attempts) {
-            try {
-                const response = await fetchv2(imageUrl, attempt.headers);
-                results.push(`${attempt.label}: status=${response.status}`);
-            } catch (error) {
-                results.push(`${attempt.label}: EXC ${String(error)}`);
-            }
-        }
-        return [{ title: `#${chapterNumber} (id ${chapter.id}) :: ${results.join(" | ")}`, image: "", href: "x" }];
-    } catch (error) {
-        return [{ title: `DEBUG EXC: ${String(error)}`, image: "", href: "x" }];
-    }
-}
-
 async function searchResults(keyword) {
-    if (keyword.startsWith("REFDEBUG:")) {
-        return JSON.stringify(await refDebugProbe(keyword.slice("REFDEBUG:".length)));
-    }
-
     try {
         const url = `${baseUrl}/search/${encodeURIComponent(keyword)}/`;
         const response = await fetchv2(url, DEFAULT_HEADERS);
@@ -148,12 +82,11 @@ async function extractChapters(url) {
         const chapters = data.chapters || [];
 
         return JSON.stringify(
-            chapters
-                .map((chapter) => ({
-                    href: `${baseUrl}/reader/${newsId}/${chapter.id}${xhash}`,
-                    number: chapter.posi,
-                    date: chapter.date || null
-                }))
+            chapters.map((chapter) => ({
+                href: `${baseUrl}/reader/${newsId}/${chapter.id}${xhash}`,
+                number: chapter.posi,
+                date: chapter.date || null
+            }))
         );
     } catch (error) {
         return JSON.stringify([]);
