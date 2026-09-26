@@ -75,14 +75,16 @@ async function xhashDebugProbe(comicQuery) {
         if (!dataMatch) return [{ title: "DEBUG: window.__DATA__ non trovato", image: "", href: "x" }];
 
         const data = JSON.parse(dataMatch[1]);
-        const sample = (data.chapters || []).slice(0, 5).map((c) => `${c.posi}:${c.id}`).join(", ");
-        return [
-            {
-                title: `news_id=${data.news_id} xhash="${data.xhash}" primi capitoli(posi:id)=[${sample}]`,
-                image: "",
-                href: "x"
-            }
-        ];
+        const sorted = [...(data.chapters || [])].sort((a, b) => a.posi - b.posi);
+        // Un risultato "finto" per ognuno dei primi 15 capitoli (in ordine
+        // di numero, non come arrivano dal sito) mostrando il vero titolo —
+        // serve a vedere se quelli rotti hanno un titolo riconoscibile
+        // (es. "Complete Collection") da poter filtrare automaticamente.
+        return sorted.slice(0, 15).map((c) => ({
+            title: `#${c.posi} (id ${c.id}): ${c.title}`,
+            image: "",
+            href: "x"
+        }));
     } catch (error) {
         return [{ title: `DEBUG EXC: ${String(error)}`, image: "", href: "x" }];
     }
