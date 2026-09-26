@@ -37,7 +37,51 @@
 
 const baseUrl = "https://batcave.biz";
 
+// TEMPORANEO — sonda di debug per capire perché solo alcuni capitoli
+// caricano le pagine (i restanti, con lo stesso news_id/xhash della pagina,
+// falliscono). Cercando "DEBUGPAGES:<query del fumetto>:<chapterId>" (es.
+// "DEBUGPAGES:superior spider-man:184540") il modulo rifà la stessa
+// richiesta che farebbe extractPages per quel capitolo e restituisce la
+// risposta grezza del server come titolo del risultato — l'unico modo per
+// vedere del testo libero dall'interno dell'app senza un dispositivo
+// collegato. Da togliere una volta risolto.
+async function debugPagesProbe(comicQuery, chapterId) {
+    try {
+        const searchUrl = `${baseUrl}/search/${encodeURIComponent(comicQuery)}/`;
+        const searchHtml = await (await fetchv2(searchUrl)).text();
+        const hrefMatch = searchHtml.match(/class="readed__title"[^>]*>\s*<a href="([^"]+)"/);
+        if (!hrefMatch) return [{ title: "DEBUG: nessun risultato di ricerca trovato", image: "", href: "x" }];
+
+        const comicHtml = await (await fetchv2(hrefMatch[1])).text();
+        const dataMatch = comicHtml.match(/window\.__DATA__\s*=\s*(\{[\s\S]*?\});/);
+        if (!dataMatch) return [{ title: "DEBUG: window.__DATA__ non trovato sulla pagina del fumetto", image: "", href: "x" }];
+
+        const data = JSON.parse(dataMatch[1]);
+        const pageResponse = await fetchv2(
+            `${baseUrl}/engine/ajax/controller.php?mod=api&action=reader/getChapterData`,
+            { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+            "POST",
+            { news_id: data.news_id, chapter_id: chapterId }
+        );
+        const bodyText = await pageResponse.text();
+        return [
+            {
+                title: `STATUS ${pageResponse.status} news_id=${data.news_id} :: ${bodyText.slice(0, 400)}`,
+                image: "",
+                href: "x"
+            }
+        ];
+    } catch (error) {
+        return [{ title: `DEBUG EXC: ${String(error)}`, image: "", href: "x" }];
+    }
+}
+
 async function searchResults(keyword) {
+    if (keyword.startsWith("DEBUGPAGES:")) {
+        const [, comicQuery, chapterId] = keyword.split(":");
+        return JSON.stringify(await debugPagesProbe(comicQuery, chapterId));
+    }
+
     try {
         const url = `${baseUrl}/search/${encodeURIComponent(keyword)}/`;
         const response = await fetchv2(url);
@@ -73,18 +117,10 @@ async function extractChapters(url) {
         const xhash = data.xhash || "";
         const chapters = data.chapters || [];
 
-        // TEMPORANEO — diagnostica per capire perché solo l'ultimo capitolo
-        // carica le pagine. `date` non viene mai mostrato da nessuna parte
-        // nell'app (verificato leggendo GingaDetailView.swift: la riga di un
-        // capitolo mostra solo il numero), quindi l'unico modo per rendere
-        // visibile qualcosa senza un dispositivo collegato è mostrare
-        // temporaneamente l'id grezzo di ogni capitolo al posto del suo
-        // numero — l'href reale (con hash incluso) resta invariato, cambia
-        // solo cosa viene mostrato nella lista. Da togliere una volta risolto.
         return JSON.stringify(
             chapters.map((chapter) => ({
                 href: `${baseUrl}/reader/${newsId}/${chapter.id}${xhash}`,
-                number: chapter.id,
+                number: chapter.posi,
                 date: chapter.date || null
             }))
         );

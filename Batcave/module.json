@@ -2,7 +2,7 @@
     "sourceName": "BatCave",
     "iconUrl": "https://batcave.biz/favicon.ico",
     "author": { "name": "Nicola", "icon": "" },
-    "version": "1.0.4",
+    "version": "1.0.5",
     "language": "English",
     "baseUrl": "https://batcave.biz",
     "searchBaseUrl": "https://batcave.biz/search/%s/",
