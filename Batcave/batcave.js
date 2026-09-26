@@ -17,10 +17,7 @@
 // the selectors below are translated directly from the Kotlin extension's
 // jsoup CSS selectors (.readed / .readed__title / .readed__img,
 // window.__DATA__ chapter JSON, the /engine/ajax/controller.php page-list
-// endpoint) rather than verified against a live HTML snapshot. If search or
-// chapters come back empty after solving the shield button, that's the
-// first thing to suspect — send back exactly what's empty/wrong and it can
-// be adjusted from there, same as any other module bug.
+// endpoint) rather than verified against a live HTML snapshot.
 //
 // Chapter list: the comic's own page embeds its full chapter list as JSON
 // in a `window.__DATA__ = {...};` <script> tag (news_id, chapters[{id,
@@ -34,57 +31,36 @@
 // reader/getChapterData with a {news_id, chapter_id} JSON body, returning
 // {data: {images: [...]}}. chapter_id here is only the leading digits of
 // the reader URL's second path segment (the xhash suffix stripped off).
+//
+// Sec-Fetch-* headers: the Kotlin extension's `configureHeaders()`
+// override sets these four on EVERY request, including the AJAX page-data
+// POST — Sec-Fetch-Mode: navigate / Sec-Fetch-Dest: document / Sec-Fetch-
+// Site: none / Sec-Fetch-User: ?1 is what a real browser sends for a fresh,
+// typed-in-the-address-bar top-level page load, not an XHR/fetch call from
+// a page (which would normally send Mode: cors/same-origin, Dest: empty).
+// Spoofing these on every request — deliberately, on the extension's part —
+// makes programmatic calls indistinguishable from a genuine page visit;
+// the guard most likely inspects exactly this to decide what to trust.
+// This was found only after direct evidence ruled out every other theory:
+// a probed "failing" chapter came back with a perfectly valid
+// {success:true, data:{images:[...]}} response on its own, and further
+// site activity in the same session made previously-failing chapters start
+// working — pointing at the guard's own trust heuristic, not a URL/parsing
+// bug, hence chasing what a real browser's fetch actually looks like.
 
 const baseUrl = "https://batcave.biz";
 
-// TEMPORANEO — sonda di debug per capire perché solo alcuni capitoli
-// caricano le pagine (i restanti, con lo stesso news_id/xhash della pagina,
-// falliscono). Cercando "DEBUGPAGES:<query del fumetto>:<chapterId>" (es.
-// "DEBUGPAGES:superior spider-man:184540") il modulo rifà la stessa
-// richiesta che farebbe extractPages per quel capitolo e restituisce la
-// risposta grezza del server come titolo del risultato — l'unico modo per
-// vedere del testo libero dall'interno dell'app senza un dispositivo
-// collegato. Da togliere una volta risolto.
-async function debugPagesProbe(comicQuery, chapterId) {
-    try {
-        const searchUrl = `${baseUrl}/search/${encodeURIComponent(comicQuery)}/`;
-        const searchHtml = await (await fetchv2(searchUrl)).text();
-        const hrefMatch = searchHtml.match(/class="readed__title"[^>]*>\s*<a href="([^"]+)"/);
-        if (!hrefMatch) return [{ title: "DEBUG: nessun risultato di ricerca trovato", image: "", href: "x" }];
-
-        const comicHtml = await (await fetchv2(hrefMatch[1])).text();
-        const dataMatch = comicHtml.match(/window\.__DATA__\s*=\s*(\{[\s\S]*?\});/);
-        if (!dataMatch) return [{ title: "DEBUG: window.__DATA__ non trovato sulla pagina del fumetto", image: "", href: "x" }];
-
-        const data = JSON.parse(dataMatch[1]);
-        const pageResponse = await fetchv2(
-            `${baseUrl}/engine/ajax/controller.php?mod=api&action=reader/getChapterData`,
-            { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
-            "POST",
-            { news_id: data.news_id, chapter_id: chapterId }
-        );
-        const bodyText = await pageResponse.text();
-        return [
-            {
-                title: `STATUS ${pageResponse.status} news_id=${data.news_id} :: ${bodyText.slice(0, 400)}`,
-                image: "",
-                href: "x"
-            }
-        ];
-    } catch (error) {
-        return [{ title: `DEBUG EXC: ${String(error)}`, image: "", href: "x" }];
-    }
-}
+const DEFAULT_HEADERS = {
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1"
+};
 
 async function searchResults(keyword) {
-    if (keyword.startsWith("DEBUGPAGES:")) {
-        const [, comicQuery, chapterId] = keyword.split(":");
-        return JSON.stringify(await debugPagesProbe(comicQuery, chapterId));
-    }
-
     try {
         const url = `${baseUrl}/search/${encodeURIComponent(keyword)}/`;
-        const response = await fetchv2(url);
+        const response = await fetchv2(url, DEFAULT_HEADERS);
         const html = await response.text();
 
         const results = [];
@@ -106,7 +82,7 @@ async function searchResults(keyword) {
 
 async function extractChapters(url) {
     try {
-        const response = await fetchv2(url);
+        const response = await fetchv2(url, DEFAULT_HEADERS);
         const html = await response.text();
 
         const dataMatch = html.match(/window\.__DATA__\s*=\s*(\{[\s\S]*?\});/);
@@ -129,14 +105,8 @@ async function extractChapters(url) {
     }
 }
 
-// Handles every shape the API's image paths can come in. The first version
-// of this only checked for a leading "http", which silently mishandles a
-// protocol-relative URL ("//cdn.host/img.jpg" — a common pattern for
-// CDN-served assets, to dodge mixed-content issues): that doesn't start
-// with "http" either, so it fell into the same branch as a site-relative
-// path and got baseUrl glued on in front of it, producing a broken
-// double-domain URL (the right number of page slots, each one a URL that
-// can never load — matches "counts right, images don't load" exactly).
+// Handles every shape the API's image paths can come in: a full URL, a
+// protocol-relative one (//cdn.host/...), or a site-relative path.
 function resolveImageUrl(raw) {
     const image = String(raw).trim();
     if (image.startsWith("http://") || image.startsWith("https://")) return image;
@@ -145,29 +115,23 @@ function resolveImageUrl(raw) {
     return `${baseUrl}/${image}`;
 }
 
-// The site's own anti-bot guard occasionally rejects a well-formed,
-// correctly-authenticated request outright rather than challenging it —
-// confirmed live: a chapter that failed to load images got a perfectly
-// valid `{success:true, data:{images:[...]}}` response when probed
-// directly, and simply making MORE successful requests to the site in the
-// same session made previously-failing chapters start working. There's no
-// setTimeout in this JS engine (plain JavaScriptCore, no timer APIs
-// injected for module scripts) to space retries out with a real delay, so
-// this just fires the request again immediately up to a few times.
-const PAGE_FETCH_ATTEMPTS = 4;
+// A couple of immediate retries on top of the Sec-Fetch fix above, kept as
+// cheap extra insurance in case the guard is still occasionally stricter
+// than expected — no setTimeout in this JS engine to space them out with a
+// real delay, so they just fire right after each other.
+const PAGE_FETCH_ATTEMPTS = 3;
 
 async function fetchChapterImages(newsId, chapterId) {
+    const headers = { ...DEFAULT_HEADERS, "Content-Type": "application/json" };
     for (let attempt = 0; attempt < PAGE_FETCH_ATTEMPTS; attempt++) {
         try {
             const response = await fetchv2(
                 `${baseUrl}/engine/ajax/controller.php?mod=api&action=reader/getChapterData`,
-                { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+                headers,
                 "POST",
                 { news_id: newsId, chapter_id: chapterId }
             );
             const json = await response.json();
-            // Falls back to a top-level `images` key too, in case the response
-            // isn't wrapped in `data` the way the Kotlin extension's model expects.
             const images = (json.data && json.data.images) || json.images || [];
             if (images.length > 0) return images;
         } catch (error) {
