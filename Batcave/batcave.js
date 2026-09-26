@@ -145,6 +145,38 @@ function resolveImageUrl(raw) {
     return `${baseUrl}/${image}`;
 }
 
+// The site's own anti-bot guard occasionally rejects a well-formed,
+// correctly-authenticated request outright rather than challenging it —
+// confirmed live: a chapter that failed to load images got a perfectly
+// valid `{success:true, data:{images:[...]}}` response when probed
+// directly, and simply making MORE successful requests to the site in the
+// same session made previously-failing chapters start working. There's no
+// setTimeout in this JS engine (plain JavaScriptCore, no timer APIs
+// injected for module scripts) to space retries out with a real delay, so
+// this just fires the request again immediately up to a few times.
+const PAGE_FETCH_ATTEMPTS = 4;
+
+async function fetchChapterImages(newsId, chapterId) {
+    for (let attempt = 0; attempt < PAGE_FETCH_ATTEMPTS; attempt++) {
+        try {
+            const response = await fetchv2(
+                `${baseUrl}/engine/ajax/controller.php?mod=api&action=reader/getChapterData`,
+                { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+                "POST",
+                { news_id: newsId, chapter_id: chapterId }
+            );
+            const json = await response.json();
+            // Falls back to a top-level `images` key too, in case the response
+            // isn't wrapped in `data` the way the Kotlin extension's model expects.
+            const images = (json.data && json.data.images) || json.images || [];
+            if (images.length > 0) return images;
+        } catch (error) {
+            // Try again — see PAGE_FETCH_ATTEMPTS' own comment.
+        }
+    }
+    return [];
+}
+
 async function extractPages(url) {
     try {
         const afterReader = url.split("/reader/")[1] || "";
@@ -152,17 +184,7 @@ async function extractPages(url) {
         const chapterIdMatch = (rawChapterId || "").match(/^\d+/);
         const chapterId = chapterIdMatch ? chapterIdMatch[0] : rawChapterId;
 
-        const response = await fetchv2(
-            `${baseUrl}/engine/ajax/controller.php?mod=api&action=reader/getChapterData`,
-            { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
-            "POST",
-            { news_id: newsId, chapter_id: chapterId }
-        );
-        const json = await response.json();
-        // Falls back to a top-level `images` key too, in case the response
-        // isn't wrapped in `data` the way the Kotlin extension's model expects.
-        const images = (json.data && json.data.images) || json.images || [];
-
+        const images = await fetchChapterImages(newsId, chapterId);
         return JSON.stringify(images.map(resolveImageUrl));
     } catch (error) {
         return JSON.stringify([]);
