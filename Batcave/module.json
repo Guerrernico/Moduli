@@ -1,0 +1,11 @@
+{
+    "sourceName": "BatCave",
+    "iconUrl": "https://batcave.biz/favicon.ico",
+    "author": { "name": "Nicola", "icon": "" },
+    "version": "1.0.0",
+    "language": "English",
+    "baseUrl": "https://batcave.biz",
+    "searchBaseUrl": "https://batcave.biz/search/%s/",
+    "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/main/Batcave/batcave.js",
+    "kind": "comic"
+}
