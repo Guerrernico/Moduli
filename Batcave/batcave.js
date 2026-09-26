@@ -73,20 +73,23 @@ async function extractChapters(url) {
         const xhash = data.xhash || "";
         const chapters = data.chapters || [];
 
+        // TEMPORANEO — diagnostica per capire perché solo l'ultimo capitolo
+        // carica le pagine. `date` non viene mai mostrato da nessuna parte
+        // nell'app (verificato leggendo GingaDetailView.swift: la riga di un
+        // capitolo mostra solo il numero), quindi l'unico modo per rendere
+        // visibile qualcosa senza un dispositivo collegato è mostrare
+        // temporaneamente l'id grezzo di ogni capitolo al posto del suo
+        // numero — l'href reale (con hash incluso) resta invariato, cambia
+        // solo cosa viene mostrato nella lista. Da togliere una volta risolto.
         return JSON.stringify(
             chapters.map((chapter) => ({
                 href: `${baseUrl}/reader/${newsId}/${chapter.id}${xhash}`,
-                number: chapter.posi,
-                // TEMPORANEO — diagnostica per capire perché solo l'ultimo
-                // capitolo carica le pagine: mostra al posto della data i
-                // valori grezzi usati per costruire l'URL del reader, così
-                // sono visibili nell'app senza bisogno di Xcode/dispositivo
-                // collegato. Da togliere una volta risolto.
-                date: `id=${chapter.id} hash=${xhash}`
+                number: chapter.id,
+                date: chapter.date || null
             }))
         );
     } catch (error) {
-        return JSON.stringify([{ href: "", number: 0, date: `DEBUG EXC: ${String(error)}` }]);
+        return JSON.stringify([]);
     }
 }
 
