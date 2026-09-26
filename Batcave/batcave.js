@@ -80,10 +80,10 @@ async function xhashDebugProbe(comicQuery) {
         // di numero, non come arrivano dal sito) mostrando il vero titolo —
         // serve a vedere se quelli rotti hanno un titolo riconoscibile
         // (es. "Complete Collection") da poter filtrare automaticamente.
-        return sorted.slice(0, 15).map((c) => ({
+        return sorted.slice(0, 15).map((c, index) => ({
             title: `#${c.posi} (id ${c.id}): ${c.title}`,
             image: "",
-            href: "x"
+            href: `x${index}`
         }));
     } catch (error) {
         return [{ title: `DEBUG EXC: ${String(error)}`, image: "", href: "x" }];
