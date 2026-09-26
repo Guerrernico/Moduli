@@ -88,9 +88,39 @@ async function xhashDebugProbe(comicQuery) {
     }
 }
 
+// TEMPORANEO — seconda sonda: cercando "IMGDEBUG" il modulo prova a
+// scaricare due immagini reali già viste nelle risposte precedenti (una di
+// un capitolo che funziona, una di uno che non funziona) direttamente dal
+// CDN img.batcave.biz, e mostra status/content-type/dimensione di
+// entrambe. Verifica se il problema è il CDN delle immagini (un dominio
+// diverso da batcave.biz, che potrebbe avere una protezione propria non
+// risolta dal tasto scudo) invece della chiamata che genera l'elenco pagine
+// — quella l'ho già vista rispondere bene anche per un capitolo che poi
+// nel lettore risultava rotto. Da togliere una volta risolto.
+async function probeImage(label, url) {
+    try {
+        const response = await fetchv2(url, DEFAULT_HEADERS);
+        const body = await response.text();
+        const contentType = (response.headers && (response.headers["content-type"] || response.headers["Content-Type"])) || "?";
+        return `${label}: status=${response.status} type=${contentType} bytes=${body.length}`;
+    } catch (error) {
+        return `${label}: EXC ${String(error)}`;
+    }
+}
+
+async function imgDebugProbe() {
+    const working = "https://img.batcave.biz/img/27/26635/184577/1-05658b016c66cd3fb9b42b8defca9b63.jpg";
+    const failing = "https://img.batcave.biz/img/27/26635/184540/1-37082be89abda3aa391721e412312b25.jpg";
+    const [a, b] = await Promise.all([probeImage("FUNZIONA(184577)", working), probeImage("NON-FUNZIONA(184540)", failing)]);
+    return [{ title: `${a} || ${b}`, image: "", href: "x" }];
+}
+
 async function searchResults(keyword) {
     if (keyword.startsWith("XHASHDEBUG:")) {
         return JSON.stringify(await xhashDebugProbe(keyword.slice("XHASHDEBUG:".length)));
+    }
+    if (keyword === "IMGDEBUG") {
+        return JSON.stringify(await imgDebugProbe());
     }
 
     try {
