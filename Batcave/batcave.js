@@ -11,20 +11,11 @@
 // request afterward (CloudflareRequestPreparer). No auto-solve — same rule
 // as everywhere else in Hoshi.
 //
-// IMPORTANT CAVEAT: the site itself blocked every attempt to fetch even a
-// single real page while writing this (both a plain request and one with a
-// browser User-Agent got the Cloudflare challenge, not real content), so
-// the selectors below are translated directly from the Kotlin extension's
-// jsoup CSS selectors (.readed / .readed__title / .readed__img,
-// window.__DATA__ chapter JSON, the /engine/ajax/controller.php page-list
-// endpoint) rather than verified against a live HTML snapshot.
-//
 // Chapter list: the comic's own page embeds its full chapter list as JSON
 // in a `window.__DATA__ = {...};` <script> tag (news_id, chapters[{id,
 // posi, title, date}], xhash) — read directly from there instead of
 // scraping a list of <a> tags, since that's what the site's own JS uses
-// too. Reader URL shape: /reader/<news_id>/<chapter.id><xhash> (xhash is a
-// short suffix glued directly onto the numeric id, no separator).
+// too. Reader URL shape: /reader/<news_id>/<chapter.id><xhash>.
 //
 // Pages: the reader page itself doesn't embed the images — they're fetched
 // client-side via a POST to /engine/ajax/controller.php?mod=api&action=
@@ -32,21 +23,29 @@
 // {data: {images: [...]}}. chapter_id here is only the leading digits of
 // the reader URL's second path segment (the xhash suffix stripped off).
 //
-// Sec-Fetch-* headers: the Kotlin extension's `configureHeaders()`
-// override sets these four on EVERY request, including the AJAX page-data
-// POST — Sec-Fetch-Mode: navigate / Sec-Fetch-Dest: document / Sec-Fetch-
-// Site: none / Sec-Fetch-User: ?1 is what a real browser sends for a fresh,
-// typed-in-the-address-bar top-level page load, not an XHR/fetch call from
-// a page (which would normally send Mode: cors/same-origin, Dest: empty).
-// Spoofing these on every request — deliberately, on the extension's part —
-// makes programmatic calls indistinguishable from a genuine page visit;
-// the guard most likely inspects exactly this to decide what to trust.
-// This was found only after direct evidence ruled out every other theory:
-// a probed "failing" chapter came back with a perfectly valid
-// {success:true, data:{images:[...]}} response on its own, and further
-// site activity in the same session made previously-failing chapters start
-// working — pointing at the guard's own trust heuristic, not a URL/parsing
-// bug, hence chasing what a real browser's fetch actually looks like.
+// Sec-Fetch-* headers: the official Kotlin extension's `configureHeaders()`
+// sets these on every request, making programmatic calls look like a real
+// browser's top-level page load rather than an XHR — kept here to match it,
+// though it turned out NOT to be the actual cause of the bug below.
+//
+// KNOWN LIMITATION, confirmed live rather than guessed: some chapters —
+// special/reprint editions like "_The Complete Collection N (Part M)" or
+// "_Annual N" — have their real chapter METADATA (title, chapter count) but
+// the site's own image CDN (img.batcave.biz) returns a genuine 403 for
+// their actual page images, unrelated to any request headers/cookies/auth
+// (confirmed by directly comparing a working chapter's image request,
+// 200/image-webp, against a broken one, 403/text-html, with byte-identical
+// request shape otherwise). This matches the official Mihon/Tachiyomi
+// BatCave extension only ever listing 33 of this same title's 43 chapters —
+// it isn't reading the site differently, the content for the rest is
+// simply unavailable server-side. Every real example found had a literal
+// " _" (space + underscore) right before the special part of its title —
+// e.g. "Superior Spider-Man (2013) _Annual 2" vs a normal
+// "Superior Spider-Man (2013) Issue #1 ..." — so extractChapters filters
+// those out rather than listing chapters that can never actually load.
+// This is a heuristic derived from real confirmed examples on one title,
+// not a documented site rule — if a chapter goes missing that shouldn't,
+// or a broken one still shows up, that's the first thing to revisit.
 
 const baseUrl = "https://batcave.biz";
 
@@ -57,74 +56,7 @@ const DEFAULT_HEADERS = {
     "Sec-Fetch-User": "?1"
 };
 
-// TEMPORANEO — sonda di debug: cercando "XHASHDEBUG:<query fumetto>" il
-// modulo mostra come risultato unico il vero valore grezzo di news_id,
-// xhash e i primi id di capitolo del fumetto trovato — non li ho mai potuti
-// vedere davvero (il sito blocca ogni mio tentativo diretto), e la teoria
-// attuale (l'xhash potrebbe non essere un semplice suffisso condiviso da
-// tutti i capitoli) va verificata sui dati reali invece che ipotizzata. Da
-// togliere una volta risolto.
-async function xhashDebugProbe(comicQuery) {
-    try {
-        const searchHtml = await (await fetchv2(`${baseUrl}/search/${encodeURIComponent(comicQuery)}/`, DEFAULT_HEADERS)).text();
-        const hrefMatch = searchHtml.match(/class="readed__title"[^>]*>\s*<a href="([^"]+)"/);
-        if (!hrefMatch) return [{ title: "DEBUG: nessun risultato trovato", image: "", href: "x" }];
-
-        const comicHtml = await (await fetchv2(hrefMatch[1], DEFAULT_HEADERS)).text();
-        const dataMatch = comicHtml.match(/window\.__DATA__\s*=\s*(\{[\s\S]*?\});/);
-        if (!dataMatch) return [{ title: "DEBUG: window.__DATA__ non trovato", image: "", href: "x" }];
-
-        const data = JSON.parse(dataMatch[1]);
-        const sorted = [...(data.chapters || [])].sort((a, b) => a.posi - b.posi);
-        // Un risultato "finto" per ognuno dei primi 15 capitoli (in ordine
-        // di numero, non come arrivano dal sito) mostrando il vero titolo —
-        // serve a vedere se quelli rotti hanno un titolo riconoscibile
-        // (es. "Complete Collection") da poter filtrare automaticamente.
-        return sorted.slice(0, 15).map((c, index) => ({
-            title: `#${c.posi} (id ${c.id}): ${c.title}`,
-            image: "",
-            href: `x${index}`
-        }));
-    } catch (error) {
-        return [{ title: `DEBUG EXC: ${String(error)}`, image: "", href: "x" }];
-    }
-}
-
-// TEMPORANEO — seconda sonda: cercando "IMGDEBUG" il modulo prova a
-// scaricare due immagini reali già viste nelle risposte precedenti (una di
-// un capitolo che funziona, una di uno che non funziona) direttamente dal
-// CDN img.batcave.biz, e mostra status/content-type/dimensione di
-// entrambe. Verifica se il problema è il CDN delle immagini (un dominio
-// diverso da batcave.biz, che potrebbe avere una protezione propria non
-// risolta dal tasto scudo) invece della chiamata che genera l'elenco pagine
-// — quella l'ho già vista rispondere bene anche per un capitolo che poi
-// nel lettore risultava rotto. Da togliere una volta risolto.
-async function probeImage(label, url) {
-    try {
-        const response = await fetchv2(url, DEFAULT_HEADERS);
-        const body = await response.text();
-        const contentType = (response.headers && (response.headers["content-type"] || response.headers["Content-Type"])) || "?";
-        return `${label}: status=${response.status} type=${contentType} bytes=${body.length}`;
-    } catch (error) {
-        return `${label}: EXC ${String(error)}`;
-    }
-}
-
-async function imgDebugProbe() {
-    const working = "https://img.batcave.biz/img/27/26635/184577/1-05658b016c66cd3fb9b42b8defca9b63.jpg";
-    const failing = "https://img.batcave.biz/img/27/26635/184540/1-37082be89abda3aa391721e412312b25.jpg";
-    const [a, b] = await Promise.all([probeImage("FUNZIONA(184577)", working), probeImage("NON-FUNZIONA(184540)", failing)]);
-    return [{ title: `${a} || ${b}`, image: "", href: "x" }];
-}
-
 async function searchResults(keyword) {
-    if (keyword.startsWith("XHASHDEBUG:")) {
-        return JSON.stringify(await xhashDebugProbe(keyword.slice("XHASHDEBUG:".length)));
-    }
-    if (keyword === "IMGDEBUG") {
-        return JSON.stringify(await imgDebugProbe());
-    }
-
     try {
         const url = `${baseUrl}/search/${encodeURIComponent(keyword)}/`;
         const response = await fetchv2(url, DEFAULT_HEADERS);
@@ -161,11 +93,16 @@ async function extractChapters(url) {
         const chapters = data.chapters || [];
 
         return JSON.stringify(
-            chapters.map((chapter) => ({
-                href: `${baseUrl}/reader/${newsId}/${chapter.id}${xhash}`,
-                number: chapter.posi,
-                date: chapter.date || null
-            }))
+            chapters
+                // See the file header: these titles' actual page images
+                // 403 server-side no matter what, so they're excluded here
+                // instead of being listed as chapters that can never load.
+                .filter((chapter) => !String(chapter.title || "").includes(" _"))
+                .map((chapter) => ({
+                    href: `${baseUrl}/reader/${newsId}/${chapter.id}${xhash}`,
+                    number: chapter.posi,
+                    date: chapter.date || null
+                }))
         );
     } catch (error) {
         return JSON.stringify([]);
@@ -182,32 +119,6 @@ function resolveImageUrl(raw) {
     return `${baseUrl}/${image}`;
 }
 
-// A couple of immediate retries on top of the Sec-Fetch fix above, kept as
-// cheap extra insurance in case the guard is still occasionally stricter
-// than expected — no setTimeout in this JS engine to space them out with a
-// real delay, so they just fire right after each other.
-const PAGE_FETCH_ATTEMPTS = 3;
-
-async function fetchChapterImages(newsId, chapterId) {
-    const headers = { ...DEFAULT_HEADERS, "Content-Type": "application/json" };
-    for (let attempt = 0; attempt < PAGE_FETCH_ATTEMPTS; attempt++) {
-        try {
-            const response = await fetchv2(
-                `${baseUrl}/engine/ajax/controller.php?mod=api&action=reader/getChapterData`,
-                headers,
-                "POST",
-                { news_id: newsId, chapter_id: chapterId }
-            );
-            const json = await response.json();
-            const images = (json.data && json.data.images) || json.images || [];
-            if (images.length > 0) return images;
-        } catch (error) {
-            // Try again — see PAGE_FETCH_ATTEMPTS' own comment.
-        }
-    }
-    return [];
-}
-
 async function extractPages(url) {
     try {
         const afterReader = url.split("/reader/")[1] || "";
@@ -215,7 +126,15 @@ async function extractPages(url) {
         const chapterIdMatch = (rawChapterId || "").match(/^\d+/);
         const chapterId = chapterIdMatch ? chapterIdMatch[0] : rawChapterId;
 
-        const images = await fetchChapterImages(newsId, chapterId);
+        const response = await fetchv2(
+            `${baseUrl}/engine/ajax/controller.php?mod=api&action=reader/getChapterData`,
+            { ...DEFAULT_HEADERS, "Content-Type": "application/json" },
+            "POST",
+            { news_id: newsId, chapter_id: chapterId }
+        );
+        const json = await response.json();
+        const images = (json.data && json.data.images) || json.images || [];
+
         return JSON.stringify(images.map(resolveImageUrl));
     } catch (error) {
         return JSON.stringify([]);
