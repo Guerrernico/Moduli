@@ -77,11 +77,16 @@ async function extractChapters(url) {
             chapters.map((chapter) => ({
                 href: `${baseUrl}/reader/${newsId}/${chapter.id}${xhash}`,
                 number: chapter.posi,
-                date: chapter.date || null
+                // TEMPORANEO — diagnostica per capire perché solo l'ultimo
+                // capitolo carica le pagine: mostra al posto della data i
+                // valori grezzi usati per costruire l'URL del reader, così
+                // sono visibili nell'app senza bisogno di Xcode/dispositivo
+                // collegato. Da togliere una volta risolto.
+                date: `id=${chapter.id} hash=${xhash}`
             }))
         );
     } catch (error) {
-        return JSON.stringify([]);
+        return JSON.stringify([{ href: "", number: 0, date: `DEBUG EXC: ${String(error)}` }]);
     }
 }
 
