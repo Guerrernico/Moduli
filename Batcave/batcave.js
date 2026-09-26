@@ -85,6 +85,22 @@ async function extractChapters(url) {
     }
 }
 
+// Handles every shape the API's image paths can come in. The first version
+// of this only checked for a leading "http", which silently mishandles a
+// protocol-relative URL ("//cdn.host/img.jpg" — a common pattern for
+// CDN-served assets, to dodge mixed-content issues): that doesn't start
+// with "http" either, so it fell into the same branch as a site-relative
+// path and got baseUrl glued on in front of it, producing a broken
+// double-domain URL (the right number of page slots, each one a URL that
+// can never load — matches "counts right, images don't load" exactly).
+function resolveImageUrl(raw) {
+    const image = String(raw).trim();
+    if (image.startsWith("http://") || image.startsWith("https://")) return image;
+    if (image.startsWith("//")) return "https:" + image;
+    if (image.startsWith("/")) return baseUrl + image;
+    return `${baseUrl}/${image}`;
+}
+
 async function extractPages(url) {
     try {
         const afterReader = url.split("/reader/")[1] || "";
@@ -94,16 +110,16 @@ async function extractPages(url) {
 
         const response = await fetchv2(
             `${baseUrl}/engine/ajax/controller.php?mod=api&action=reader/getChapterData`,
-            { "Content-Type": "application/json" },
+            { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
             "POST",
             { news_id: newsId, chapter_id: chapterId }
         );
         const json = await response.json();
-        const images = (json.data && json.data.images) || [];
+        // Falls back to a top-level `images` key too, in case the response
+        // isn't wrapped in `data` the way the Kotlin extension's model expects.
+        const images = (json.data && json.data.images) || json.images || [];
 
-        return JSON.stringify(
-            images.map((image) => (image.startsWith("http") ? image.trim() : baseUrl + image.trim()))
-        );
+        return JSON.stringify(images.map(resolveImageUrl));
     } catch (error) {
         return JSON.stringify([]);
     }
