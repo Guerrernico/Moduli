@@ -57,7 +57,42 @@ const DEFAULT_HEADERS = {
     "Sec-Fetch-User": "?1"
 };
 
+// TEMPORANEO — sonda di debug: cercando "XHASHDEBUG:<query fumetto>" il
+// modulo mostra come risultato unico il vero valore grezzo di news_id,
+// xhash e i primi id di capitolo del fumetto trovato — non li ho mai potuti
+// vedere davvero (il sito blocca ogni mio tentativo diretto), e la teoria
+// attuale (l'xhash potrebbe non essere un semplice suffisso condiviso da
+// tutti i capitoli) va verificata sui dati reali invece che ipotizzata. Da
+// togliere una volta risolto.
+async function xhashDebugProbe(comicQuery) {
+    try {
+        const searchHtml = await (await fetchv2(`${baseUrl}/search/${encodeURIComponent(comicQuery)}/`, DEFAULT_HEADERS)).text();
+        const hrefMatch = searchHtml.match(/class="readed__title"[^>]*>\s*<a href="([^"]+)"/);
+        if (!hrefMatch) return [{ title: "DEBUG: nessun risultato trovato", image: "", href: "x" }];
+
+        const comicHtml = await (await fetchv2(hrefMatch[1], DEFAULT_HEADERS)).text();
+        const dataMatch = comicHtml.match(/window\.__DATA__\s*=\s*(\{[\s\S]*?\});/);
+        if (!dataMatch) return [{ title: "DEBUG: window.__DATA__ non trovato", image: "", href: "x" }];
+
+        const data = JSON.parse(dataMatch[1]);
+        const sample = (data.chapters || []).slice(0, 5).map((c) => `${c.posi}:${c.id}`).join(", ");
+        return [
+            {
+                title: `news_id=${data.news_id} xhash="${data.xhash}" primi capitoli(posi:id)=[${sample}]`,
+                image: "",
+                href: "x"
+            }
+        ];
+    } catch (error) {
+        return [{ title: `DEBUG EXC: ${String(error)}`, image: "", href: "x" }];
+    }
+}
+
 async function searchResults(keyword) {
+    if (keyword.startsWith("XHASHDEBUG:")) {
+        return JSON.stringify(await xhashDebugProbe(keyword.slice("XHASHDEBUG:".length)));
+    }
+
     try {
         const url = `${baseUrl}/search/${encodeURIComponent(keyword)}/`;
         const response = await fetchv2(url, DEFAULT_HEADERS);
