@@ -14,5 +14,6 @@
     "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/refs/heads/main/AnimeWorld/animeworld.js",
     "type": "anime",
     "encrypted":true,
-    "asyncJS": true
+    "asyncJS": true,
+    "settings": true
 }

@@ -1,6 +1,14 @@
+// Settings start
+const baseUrl = "animeunity.so"; // Non aggiungere 'https://' all'inizio o "/" alla fine
+// Settings end
+
+function getFullDomain() {
+  return `https://www.${baseUrl}`;
+}
+
 async function searchResults(keyword) {
   const response = await soraFetch(
-    `https://www.animeunity.so/archivio?title=${keyword}`
+    `${getFullDomain()}/archivio?title=${keyword}`
   );
   const html = await response.text();
 
@@ -17,7 +25,7 @@ async function searchResults(keyword) {
     items.map((item) => ({
       title: item.title ?? item.title_eng,
       image: item.imageurl,
-      href: `https://www.animeunity.so/info_api/${item.id}`,
+      href: `${getFullDomain()}/info_api/${item.id}`,
     })) || [];
 
   return JSON.stringify(results);
@@ -51,7 +59,7 @@ async function extractEpisodes(url) {
     }
 
     const pageResponse = await soraFetch(
-      `https://www.animeunity.so/anime/${idAnime}-${slug}`
+      `${getFullDomain()}/anime/${idAnime}-${slug}`
     );
     const html = await pageResponse.text();
 
@@ -74,11 +82,11 @@ async function extractEpisodes(url) {
 
     episodesData.forEach((episode) => {
       episodes.push({
-        href: `https://animeunity.so/anime/${idAnime}-${slug}/${episode.id}`,
+        href: `${getFullDomain()}/anime/${idAnime}-${slug}/${episode.id}`,
         number: parseInt(episode.number),
       });
     });
-    
+
     return JSON.stringify(episodes);
   } catch (error) {
     console.log("Error extracting episodes:", error);

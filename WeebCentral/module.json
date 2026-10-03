@@ -6,6 +6,6 @@
     "language": "English",
     "baseUrl": "https://weebcentral.com",
     "searchBaseUrl": "https://weebcentral.com/search/simple?location=main",
-    "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/refs/heads/main/WeebCentral/weebcentral.js",
+    "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/main/WeebCentral/weebcentral.js",
     "kind": "manga"
 }

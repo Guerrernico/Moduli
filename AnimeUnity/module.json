@@ -13,5 +13,6 @@
     "searchBaseUrl": "https://www.animeunity.so/archivio?title=%s",
     "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/refs/heads/main/AnimeUnity/animeunity.js",
     "asyncJS": true,
-    "type": "anime"
+    "type": "anime",
+    "settings": true
 }
