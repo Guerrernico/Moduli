@@ -25,7 +25,9 @@
 // happen to appear in the document, since the two loading strategies
 // don't appear in reading order relative to each other.
 
-const baseUrl = "https://readcomicsonline.lol";
+// Settings start
+const baseUrl = "https://readcomicsonline.lol"; // Includi 'https://' all'inizio, non aggiungere "/" alla fine
+// Settings end
 
 async function searchResults(keyword) {
     const results = [];

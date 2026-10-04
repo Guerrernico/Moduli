@@ -7,5 +7,6 @@
     "baseUrl": "https://readcomicsonline.lol",
     "searchBaseUrl": "https://readcomicsonline.lol/api/search?q=%s",
     "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/main/ReadComicsOnlineLol/readcomicsonline-lol.js",
-    "kind": "comic"
+    "kind": "comic",
+    "settings": true
 }

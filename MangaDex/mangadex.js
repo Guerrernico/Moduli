@@ -21,7 +21,9 @@
 // fetch, one at-home-server fetch per page load), no auth needed for any
 // of this.
 
-const apiBase = "https://api.mangadex.org";
+// Settings start
+const baseUrl = "https://api.mangadex.org"; // Includi 'https://' all'inizio, non aggiungere "/" alla fine — l'API ufficiale di MangaDex, raramente va cambiata
+// Settings end
 
 function pickTitle(attributes) {
     const title = attributes?.title || {};
@@ -38,7 +40,7 @@ async function searchResults(keyword) {
     const results = [];
 
     try {
-        const url = `${apiBase}/manga?title=${encodeURIComponent(keyword)}&limit=20&includes[]=cover_art`;
+        const url = `${baseUrl}/manga?title=${encodeURIComponent(keyword)}&limit=20&includes[]=cover_art`;
         const response = await fetchv2(url);
         const status = response.status ?? "?";
         const text = await response.text();
@@ -70,7 +72,7 @@ async function searchResults(keyword) {
             results.push({
                 title: pickTitle(manga.attributes),
                 image: fileName ? `https://uploads.mangadex.org/covers/${manga.id}/${fileName}.256.jpg` : "",
-                href: `${apiBase}/manga/${manga.id}`,
+                href: `${baseUrl}/manga/${manga.id}`,
             });
         }
 
@@ -94,7 +96,7 @@ async function extractChapters(url) {
         const limit = 500;
 
         while (true) {
-            const feedUrl = `${apiBase}/manga/${mangaId}/feed?translatedLanguage[]=en&order[chapter]=asc&limit=${limit}&offset=${offset}`;
+            const feedUrl = `${baseUrl}/manga/${mangaId}/feed?translatedLanguage[]=en&order[chapter]=asc&limit=${limit}&offset=${offset}`;
             const response = await fetchv2(feedUrl);
             const json = JSON.parse(await response.text());
             const data = json.data || [];
@@ -107,7 +109,7 @@ async function extractChapters(url) {
                 if (isNaN(number) || seenNumbers.has(number)) continue;
                 seenNumbers.add(number);
                 chapters.push({
-                    href: `${apiBase}/chapter/${chapter.id}`,
+                    href: `${baseUrl}/chapter/${chapter.id}`,
                     number,
                     date: attrs.publishAt || null,
                 });
@@ -130,14 +132,17 @@ async function extractPages(url) {
         const chapterId = idMatch ? idMatch[1] : null;
         if (!chapterId) return JSON.stringify([]);
 
-        const response = await fetchv2(`${apiBase}/at-home/server/${chapterId}`);
+        const response = await fetchv2(`${baseUrl}/at-home/server/${chapterId}`);
         const json = JSON.parse(await response.text());
         if (json.result !== "ok") return JSON.stringify([]);
 
-        const baseUrl = json.baseUrl;
+        // Not the configured baseUrl above — MangaDex's at-home/server
+        // endpoint hands back a one-time, per-chapter image CDN host that
+        // changes on every call, nothing to do with the module's own site URL.
+        const cdnBaseUrl = json.baseUrl;
         const hash = json.chapter?.hash;
         const files = json.chapter?.data || [];
-        const pages = files.map((fileName) => `${baseUrl}/data/${hash}/${fileName}`);
+        const pages = files.map((fileName) => `${cdnBaseUrl}/data/${hash}/${fileName}`);
 
         return JSON.stringify(pages);
     } catch (error) {

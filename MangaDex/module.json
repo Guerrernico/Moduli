@@ -7,5 +7,6 @@
     "baseUrl": "https://mangadex.org",
     "searchBaseUrl": "https://api.mangadex.org/manga?title=%s",
     "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/main/MangaDex/mangadex.js",
-    "kind": "manga"
+    "kind": "manga",
+    "settings": true
 }

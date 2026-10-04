@@ -36,7 +36,9 @@
 // Referer to the request's own registrable domain when none is set,
 // covering every page image this or any other module returns.
 
-const baseUrl = "https://batcave.biz";
+// Settings start
+const baseUrl = "https://batcave.biz"; // Includi 'https://' all'inizio, non aggiungere "/" alla fine
+// Settings end
 
 const DEFAULT_HEADERS = {
     "Sec-Fetch-Dest": "document",

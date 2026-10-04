@@ -18,7 +18,9 @@
 // Pages: GET /chapters/<id>/images?is_prev=False&current_page=1&reading_style=long_strip
 // -> a sequence of <img src="..."> tags already in reading order.
 
-const baseUrl = "https://weebcentral.com";
+// Settings start
+const baseUrl = "https://weebcentral.com"; // Includi 'https://' all'inizio, non aggiungere "/" alla fine
+// Settings end
 
 function decodeHtmlEntities(text) {
     return text
@@ -42,7 +44,10 @@ async function searchResults(keyword) {
         const status = response.status ?? "?";
         const html = await response.text();
 
-        const itemRegex = /<a href="(https:\/\/weebcentral\.com\/series\/[^"]+)"[\s\S]*?src="([^"]*cover[^"]*)"[\s\S]*?line-clamp-2">\s*([^<]+?)\s*<\/div>/g;
+        // Matches any host in the href (not tied to the configured baseUrl),
+        // since the response's own links keep working as search results
+        // regardless of which mirror domain is set here.
+        const itemRegex = /<a href="(https:\/\/[^"]+?\/series\/[^"]+)"[\s\S]*?src="([^"]*cover[^"]*)"[\s\S]*?line-clamp-2">\s*([^<]+?)\s*<\/div>/g;
         let match;
         while ((match = itemRegex.exec(html)) !== null) {
             results.push({

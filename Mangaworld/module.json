@@ -9,5 +9,6 @@
     "language": "Italian",
     "baseUrl": "https://www.mangaworld.mx",
     "searchBaseUrl": "https://www.mangaworld.mx/archive?keyword=%s",
-    "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/refs/heads/main/Mangaworld/mangaworld.js"
+    "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/refs/heads/main/Mangaworld/mangaworld.js",
+    "settings": true
 }

@@ -1,3 +1,7 @@
+// Settings start
+const baseUrl = "https://www.mangaworld.mx"; // Includi 'https://' all'inizio, non aggiungere "/" alla fine
+// Settings end
+
 async function mwFetch(url, options = { headers: {}, method: "GET", body: null, encoding: "utf-8" }) {
     try {
         return await fetchv2(url, options.headers ?? {}, options.method ?? "GET", options.body ?? null, true, options.encoding ?? "utf-8");
@@ -20,7 +24,6 @@ function decodeHtmlEntities(text) {
 }
 
 async function searchResults(keyword) {
-    const baseUrl = "https://www.mangaworld.mx";
     const results = [];
 
     try {

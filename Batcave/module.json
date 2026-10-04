@@ -7,5 +7,6 @@
     "baseUrl": "https://batcave.biz",
     "searchBaseUrl": "https://batcave.biz/search/%s/",
     "scriptUrl": "https://raw.githubusercontent.com/Guerrernico/Moduli/main/Batcave/batcave.js",
-    "kind": "comic"
+    "kind": "comic",
+    "settings": true
 }
